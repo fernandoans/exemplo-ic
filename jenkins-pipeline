@@ -1,0 +1,30 @@
+node {
+  stage('Verificar Credenciais Git') {
+    git credentialsId: '757090dd-5c68-4295-9f6c-b099c3c6e285', url: 'https://github.com/fernandoans/exemplo-ic'
+  }
+  stage('Pacote MVN') {
+    def mvnHome = tool name: 'Maven3', type: 'maven'
+    def mvnCMD = "${mvnHome}/bin/mvn"
+    sh "${mvnCMD} clean package"
+  }
+  stage('Construir Imagem Docker') {
+    sh 'docker build -t fernandoanselmo/my-app:1.0.0 .'
+  }  
+  stage('Subir a Imagem') {
+    withCredentials([string(credentialsId: 'DockerHubPwd', variable: 'DockerHub')]) {
+      sh "docker login -u fernandoanselmo -p ${DockerHub}"
+    }
+    sh 'docker push fernandoanselmo/my-app:1.0.0'
+  }
+  stage('Executar Local') {
+    containerID = sh(script: "docker ps --quiet --filter name=meu-app", returnStdout: true).trim()
+    if (!containerID.isEmpty()) {
+        sh 'docker stop meu-app'
+    }
+    containerID = sh(script: "docker ps -a --quiet --filter name=meu-app", returnStdout: true).trim()
+    if (!containerID.isEmpty()) {
+        sh 'docker rm meu-app'
+    }
+    sh 'docker run -p 8080:8080 -d --name meu-app fernandoanselmo/my-app:1.0.0'
+  }
+}
